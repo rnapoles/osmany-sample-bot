@@ -1,0 +1,89 @@
+<?php
+
+namespace App\TelegramBot;
+
+use App\TelegramBot\Types\Message;
+
+class Botan
+{
+  /**
+   * @var string Tracker url
+   */
+  public const BASE_URL = 'https://api.botan.io/track';
+
+  /**
+   * CURL object.
+   *
+   * @var
+   */
+  protected $curl;
+
+  /**
+   * Yandex AppMetrica application api_key.
+   *
+   * @var string
+   */
+  protected $token;
+
+  /**
+   * Botan constructor.
+   *
+   * @param string $token
+   *
+   * @throws \Exception
+   */
+  public function __construct($token)
+  {
+    if (!function_exists('curl_version')) {
+      throw new Exception('CURL not installed');
+    }
+
+    if (empty($token) || !is_string($token)) {
+      throw new InvalidArgumentException('Token should be a string');
+    }
+
+    $this->token = $token;
+    $this->curl = curl_init();
+  }
+
+  /**
+   * Event tracking.
+   *
+   * @param string $eventName
+   *
+   * @throws \App\TelegramBot\Exception
+   * @throws \App\TelegramBot\HttpException
+   */
+  public function track(Message $message, $eventName = 'Message')
+  {
+    $uid = $message->getFrom()->getId();
+
+    $options = [
+      CURLOPT_URL => self::BASE_URL."?token={$this->token}&uid={$uid}&name={$eventName}",
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_POST => true,
+      CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+      ],
+      CURLOPT_POSTFIELDS => $message->toJson(),
+      CURLOPT_TIMEOUT => 5,
+    ];
+
+    curl_setopt_array($this->curl, $options);
+    $result = BotApi::jsonValidate(curl_exec($this->curl), true);
+
+    BotApi::curlValidate($this->curl);
+
+    if ('accepted' !== $result['status']) {
+      throw new Exception('Error Processing Request');
+    }
+  }
+
+  /**
+   * Destructor. Close curl.
+   */
+  public function __destruct()
+  {
+    $this->curl && curl_close($this->curl);
+  }
+}
